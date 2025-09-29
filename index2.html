@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>History Transaksi</title>
+    <link
+      rel="stylesheet"
+      href="/vendor/bootstrap-5.3.7/package/dist/css/bootstrap.min.css"
+    />
+  </head>
+  <body class="container mt-5">
+    <h1 class="mb-3">📜 History Transaksi</h1>
+    <a href="index.html" class="btn btn-secondary mb-3">⬅ Kembali</a>
+    <ul class="list-group" id="historyList"></ul>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const history = JSON.parse(localStorage.getItem("history") || "[]");
+        const list = document.getElementById("historyList");
+
+        if (history.length === 0) {
+          list.innerHTML =
+            '<li class="list-group-item text-center">Belum ada history</li>';
+          return;
+        }
+
+        history.reverse().forEach((h) => {
+          const li = document.createElement("li");
+          li.className = "list-group-item";
+          const tgl = new Date(h.waktu).toLocaleString("id-ID");
+          li.innerHTML = `
+            <strong>${h.action}</strong> - ${h.data.deskripsi} 
+            (${h.data.tipe === "in" ? "Pemasukan" : "Pengeluaran"}: Rp ${
+            h.data.jumlah
+          }) 
+            <br><small>${tgl}</small>
+          `;
+          list.appendChild(li);
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -24,6 +24,9 @@
       <h1 class="mb-3">💰 Web Cash Flow</h1>
       <hr />
 
+      <!-- Notifikasi -->
+      <div id="alertBox" class="mt-3"></div>
+
       <!-- Dashboard Ringkasan -->
       <div class="row text-center mb-4">
         <div class="col-md-4">
@@ -114,6 +117,13 @@
           <ul class="list-group" id="transaksiList"></ul>
         </div>
       </div>
+
+      <!-- Tombol ke history -->
+      <div class="mt-3">
+        <a href="index2.html" class="btn btn-outline-dark">
+          📜 Lihat History Transaksi
+        </a>
+      </div>
     </div>
 
     <script>
@@ -130,6 +140,32 @@
         }).format(num);
       }
 
+      function showAlert(message, type = "success") {
+        const alertBox = document.getElementById("alertBox");
+        const alert = document.createElement("div");
+        alert.className = `alert alert-${type} alert-dismissible fade show`;
+        alert.role = "alert";
+        alert.innerHTML = `
+          ${message}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        alertBox.appendChild(alert);
+        setTimeout(() => {
+          alert.classList.remove("show");
+          setTimeout(() => alert.remove(), 300);
+        }, 3000);
+      }
+
+      function saveHistory(action, data) {
+        const history = JSON.parse(localStorage.getItem("history") || "[]");
+        history.push({
+          action,
+          data,
+          waktu: new Date().toISOString(),
+        });
+        localStorage.setItem("history", JSON.stringify(history));
+      }
+
       function filterByPeriode(data) {
         const filter = document.getElementById("filterPeriode").value;
         const now = new Date();
@@ -139,9 +175,9 @@
             return tgl.toDateString() === now.toDateString();
           if (filter === "minggu") {
             const startOfWeek = new Date(now);
-            startOfWeek.setDate(now.getDate() - now.getDay()); // Minggu
+            startOfWeek.setDate(now.getDate() - now.getDay());
             const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(startOfWeek.getDate() + 6); // Sabtu
+            endOfWeek.setDate(startOfWeek.getDate() + 6);
             return tgl >= startOfWeek && tgl <= endOfWeek;
           }
           if (filter === "bulan")
@@ -151,7 +187,7 @@
             );
           if (filter === "tahun")
             return tgl.getFullYear() === now.getFullYear();
-          return true; // semua
+          return true;
         });
       }
 
@@ -218,8 +254,7 @@
             {
               id: "centerText",
               beforeDraw: (chart) => {
-                const { width } = chart;
-                const { height } = chart;
+                const { width, height } = chart;
                 const ctx = chart.ctx;
                 ctx.restore();
                 ctx.font = "16px Arial";
@@ -281,7 +316,6 @@
           </button>
         `;
 
-          // Edit button
           right.querySelector(".edit-btn").addEventListener("click", () => {
             const form = document.getElementById("formTransaksi");
             form.deskripsi.value = item.deskripsi;
@@ -291,10 +325,12 @@
             form.editIndex.value = index;
           });
 
-          // Delete button
           right.querySelector(".delete-btn").addEventListener("click", () => {
+            const deleted = transaksi[index];
             transaksi.splice(index, 1);
             saveData();
+            saveHistory("Hapus", deleted);
+            showAlert("🗑️ Data berhasil dihapus!", "danger");
             renderTransaksi();
           });
 
@@ -303,7 +339,6 @@
           list.appendChild(li);
         });
 
-        // update dashboard
         document.getElementById("saldo").textContent = formatRupiah(saldo);
         document.getElementById("totalIn").textContent =
           formatRupiah(pemasukan);
@@ -333,8 +368,12 @@
 
           if (editIndex !== "") {
             transaksi[editIndex] = newData;
+            saveHistory("Edit", newData);
+            showAlert("✏️ Data berhasil diperbarui!", "info");
           } else {
             transaksi.push(newData);
+            saveHistory("Tambah", newData);
+            showAlert("✅ Data berhasil ditambahkan!", "success");
           }
 
           saveData();
