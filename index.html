@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <link rel="icon" type="image/png" href="/assets/Foto1.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Web Cash Flow</title>
+
+    <!-- Bootstrap v5.3 -->
+    <link
+      rel="stylesheet"
+      href="/vendor/bootstrap-5.3.7/package/dist/css/bootstrap.min.css"
+    />
+    <!-- Bootstrap Icons -->
+    <link
+      rel="stylesheet"
+      href="/vendor/bootstrap-icons-1.13.1/package/font/bootstrap-icons.min.css"
+    />
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="container mt-5">
+      <h1 class="mb-3">💰 Web Cash Flow</h1>
+      <hr />
+
+      <!-- Dashboard Ringkasan -->
+      <div class="row text-center mb-4">
+        <div class="col-md-4">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h5>Pemasukan</h5>
+              <p class="text-success fw-bold" id="totalIn">Rp 0</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h5>Pengeluaran</h5>
+              <p class="text-danger fw-bold" id="totalOut">Rp 0</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h5>Saldo Akhir</h5>
+              <p class="text-primary fw-bold" id="saldo">Rp 0</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grafik -->
+      <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+          <h5 class="mb-3">📊 Grafik Cash Flow</h5>
+          <canvas id="cashFlowChart" height="100"></canvas>
+        </div>
+      </div>
+
+      <!-- Form tambah/edit transaksi -->
+      <form id="formTransaksi" class="row g-3 mb-4">
+        <input type="hidden" name="editIndex" />
+        <div class="col-md-3">
+          <label class="form-label">Deskripsi</label>
+          <input type="text" class="form-control" name="deskripsi" required />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Jumlah</label>
+          <input type="number" class="form-control" name="jumlah" required />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Tipe</label>
+          <select name="tipe" class="form-select">
+            <option value="in">Pemasukan</option>
+            <option value="out">Pengeluaran</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Kategori</label>
+          <input
+            type="text"
+            class="form-control"
+            name="kategori"
+            placeholder="(opsional)"
+          />
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-save"></i> Simpan
+          </button>
+        </div>
+      </form>
+
+      <!-- Filter Laporan -->
+      <div class="row mb-3">
+        <div class="col-md-3">
+          <select id="filterPeriode" class="form-select">
+            <option value="all">Semua Periode</option>
+            <option value="hari">Hari Ini</option>
+            <option value="minggu">Minggu Ini</option>
+            <option value="bulan">Bulan Ini</option>
+            <option value="tahun">Tahun Ini</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Daftar transaksi -->
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="mb-3">📜 Daftar Transaksi</h5>
+          <ul class="list-group" id="transaksiList"></ul>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let transaksi = [];
+
+      function saveData() {
+        localStorage.setItem("transaksi", JSON.stringify(transaksi));
+      }
+
+      function formatRupiah(num) {
+        return new Intl.NumberFormat("id-ID", {
+          style: "currency",
+          currency: "IDR",
+        }).format(num);
+      }
+
+      function filterByPeriode(data) {
+        const filter = document.getElementById("filterPeriode").value;
+        const now = new Date();
+        return data.filter((item) => {
+          const tgl = new Date(item.tanggal);
+          if (filter === "hari")
+            return tgl.toDateString() === now.toDateString();
+          if (filter === "minggu") {
+            const startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() - now.getDay()); // Minggu
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 6); // Sabtu
+            return tgl >= startOfWeek && tgl <= endOfWeek;
+          }
+          if (filter === "bulan")
+            return (
+              tgl.getMonth() === now.getMonth() &&
+              tgl.getFullYear() === now.getFullYear()
+            );
+          if (filter === "tahun")
+            return tgl.getFullYear() === now.getFullYear();
+          return true; // semua
+        });
+      }
+
+      let chart;
+      function updateChart(data) {
+        const ctx = document.getElementById("cashFlowChart").getContext("2d");
+        const pemasukan = data
+          .filter((t) => t.tipe === "in")
+          .reduce((sum, t) => sum + t.jumlah, 0);
+        const pengeluaran = data
+          .filter((t) => t.tipe === "out")
+          .reduce((sum, t) => sum + t.jumlah, 0);
+        const saldo = pemasukan - pengeluaran;
+
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+          type: "doughnut",
+          data: {
+            labels: ["Pemasukan", "Pengeluaran"],
+            datasets: [
+              {
+                data: [pemasukan, pengeluaran],
+                backgroundColor: ["#28a745", "#dc3545"],
+              },
+            ],
+          },
+          options: {
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    const value = context.raw;
+                    const total = pemasukan + pengeluaran;
+                    const percent = total
+                      ? ((value / total) * 100).toFixed(1)
+                      : 0;
+                    return `${context.label}: ${formatRupiah(
+                      value
+                    )} (${percent}%)`;
+                  },
+                },
+              },
+              legend: {
+                labels: {
+                  generateLabels: function (chart) {
+                    const data = chart.data;
+                    const total = pemasukan + pengeluaran;
+                    return data.labels.map((label, i) => {
+                      const value = data.datasets[0].data[i];
+                      const percent = total
+                        ? ((value / total) * 100).toFixed(1)
+                        : 0;
+                      return {
+                        text: `${label}: ${formatRupiah(value)} (${percent}%)`,
+                        fillStyle: data.datasets[0].backgroundColor[i],
+                      };
+                    });
+                  },
+                },
+              },
+            },
+          },
+          plugins: [
+            {
+              id: "centerText",
+              beforeDraw: (chart) => {
+                const { width } = chart;
+                const { height } = chart;
+                const ctx = chart.ctx;
+                ctx.restore();
+                ctx.font = "16px Arial";
+                ctx.textBaseline = "middle";
+                const text = "Saldo: " + formatRupiah(saldo);
+                const textX = Math.round(
+                  (width - ctx.measureText(text).width) / 2
+                );
+                const textY = height / 2;
+                ctx.fillText(text, textX, textY);
+                ctx.save();
+              },
+            },
+          ],
+        });
+      }
+
+      function renderTransaksi() {
+        const list = document.getElementById("transaksiList");
+        list.innerHTML = "";
+
+        let saldo = 0,
+          pemasukan = 0,
+          pengeluaran = 0;
+
+        const dataFiltered = filterByPeriode(transaksi);
+
+        dataFiltered.forEach((item, index) => {
+          if (item.tipe === "in") {
+            saldo += item.jumlah;
+            pemasukan += item.jumlah;
+          } else {
+            saldo -= item.jumlah;
+            pengeluaran += item.jumlah;
+          }
+
+          const li = document.createElement("li");
+          li.className =
+            "list-group-item d-flex justify-content-between align-items-center";
+
+          const text = document.createElement("div");
+          text.innerHTML = `<strong>${item.deskripsi}</strong> <br>
+          <small>${item.kategori || "-"} | ${new Date(
+            item.tanggal
+          ).toLocaleDateString()}</small>`;
+
+          const right = document.createElement("div");
+          right.innerHTML = `
+          <span class="${
+            item.tipe === "in" ? "text-success" : "text-danger"
+          } me-3">
+            ${item.tipe === "in" ? "+" : "-"} ${formatRupiah(item.jumlah)}
+          </span>
+          <button class="btn btn-sm btn-outline-secondary me-1 edit-btn">
+            <i class="bi bi-pencil"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-danger delete-btn">
+            <i class="bi bi-trash"></i>
+          </button>
+        `;
+
+          // Edit button
+          right.querySelector(".edit-btn").addEventListener("click", () => {
+            const form = document.getElementById("formTransaksi");
+            form.deskripsi.value = item.deskripsi;
+            form.jumlah.value = item.jumlah;
+            form.tipe.value = item.tipe;
+            form.kategori.value = item.kategori;
+            form.editIndex.value = index;
+          });
+
+          // Delete button
+          right.querySelector(".delete-btn").addEventListener("click", () => {
+            transaksi.splice(index, 1);
+            saveData();
+            renderTransaksi();
+          });
+
+          li.appendChild(text);
+          li.appendChild(right);
+          list.appendChild(li);
+        });
+
+        // update dashboard
+        document.getElementById("saldo").textContent = formatRupiah(saldo);
+        document.getElementById("totalIn").textContent =
+          formatRupiah(pemasukan);
+        document.getElementById("totalOut").textContent =
+          formatRupiah(pengeluaran);
+
+        updateChart(dataFiltered);
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const stored = localStorage.getItem("transaksi");
+        if (stored) transaksi = JSON.parse(stored);
+
+        const form = document.getElementById("formTransaksi");
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const data = new FormData(form);
+          const editIndex = data.get("editIndex");
+
+          const newData = {
+            deskripsi: data.get("deskripsi"),
+            jumlah: parseFloat(data.get("jumlah")),
+            tipe: data.get("tipe"),
+            kategori: data.get("kategori"),
+            tanggal: new Date().toISOString(),
+          };
+
+          if (editIndex !== "") {
+            transaksi[editIndex] = newData;
+          } else {
+            transaksi.push(newData);
+          }
+
+          saveData();
+          renderTransaksi();
+          form.reset();
+          form.editIndex.value = "";
+        });
+
+        document
+          .getElementById("filterPeriode")
+          .addEventListener("change", () => {
+            renderTransaksi();
+          });
+
+        renderTransaksi();
+      });
+    </script>
+  </body>
+</html>
